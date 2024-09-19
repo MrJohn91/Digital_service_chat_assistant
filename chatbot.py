@@ -2,7 +2,7 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
-from huggingface_hub import InferenceClient
+from langchain.llms import HuggingFaceHub  # Correct LLM class for Hugging Face
 import json
 import os
 
@@ -12,8 +12,11 @@ def load_chatbot():
     # Embedding model
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     
-    # Initialize the InferenceClient with the correct parameters
-    client = InferenceClient(model="mistralai/Mistral-7B-Instruct-v0.3", token=huggingfacehub_api_token)
+    # Correctly initialize the HuggingFaceHub model
+    llm = HuggingFaceHub(
+        repo_id="mistralai/Mistral-7B-Instruct-v0.3",
+        huggingfacehub_api_token=huggingfacehub_api_token
+    )
 
     # Load the FAQ data
     with open("spotify_faq_data.json") as f:
@@ -27,9 +30,9 @@ def load_chatbot():
     # Set up Conversation Memory
     memory = ConversationBufferMemory(memory_key="chat_history")
 
-    # Set up Conversational Retrieval Chain with the client
+    # Set up Conversational Retrieval Chain with the correct llm
     qa_chain = ConversationalRetrievalChain.from_llm(
-        llm=client,  # Use client here instead of llm
+        llm=llm,  # Using HuggingFaceHub model now
         retriever=vector_store.as_retriever(),
         memory=memory,
         verbose=True

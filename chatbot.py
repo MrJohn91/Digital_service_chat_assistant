@@ -7,10 +7,9 @@ import json
 import os
 
 def load_chatbot():
+     huggingfacehub_api_token = os.getenv("HUGGING_FACE_TOKEN")
     # Embedding model
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-
-    huggingfacehub_api_token = os.getenv("HUGGING_FACE_TOKEN")
 
     llm = HuggingFaceHub(
         repo_id="mistralai/Mistral-7B-Instruct-v0.3",

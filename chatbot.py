@@ -12,17 +12,10 @@ def load_chatbot():
     # Embedding model
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     
-  llm = HuggingFaceHub(
-    repo_id="google/flan-t5-base",
-    huggingfacehub_api_token=huggingfacehub_api_token,
-    model_kwargs={
-        "temperature": 0.5,   # Lower temperature for more deterministic responses
-        "max_length": 250,    # Increase max length for longer responses
-        "repetition_penalty": 1.2,  # Reduce repetition
-        "top_p": 0.9,         # Nucleus sampling
-        "top_k": 50           # Limit token choices for diversity
-    }
-)
+    llm = HuggingFaceHub(
+        repo_id="google/flan-t5-base", 
+        huggingfacehub_api_token=huggingfacehub_api_token
+    )
 
     # Load the FAQ data
     with open("spotify_faq_data.json") as f:

@@ -1,4 +1,4 @@
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.llms import HuggingFaceEndpoint
 from langchain.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain

@@ -11,15 +11,12 @@ def load_chatbot():
     
     # Embedding model
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    
-  from langchain.llms import HuggingFaceHub
 
-from langchain.llms import HuggingFaceHub
+from huggingface_hub import InferenceClient
 
-llm = HuggingFaceHub(
-    repo_id="google/flan-t5-large",
-    huggingfacehub_api_token=huggingfacehub_api_token,
-)
+client = InferenceClient(token=huggingfacehub_api_token)
+response = client.text_generation("Your question here", model="google/flan-t5-large")
+
     # Load the FAQ data
     with open("spotify_faq_data.json") as f:
         faq_data = json.load(f)

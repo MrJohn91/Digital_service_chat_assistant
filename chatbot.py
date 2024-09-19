@@ -13,10 +13,11 @@ def load_chatbot():
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     
     # Use a general-purpose model for flexibility
-   llm = HuggingFaceHub(
-    repo_id="bigscience/bloom-560m",  # or another model
-    huggingfacehub_api_token=huggingfacehub_api_token,
-    model_kwargs={"temperature": 0.6, "max_new_tokens": 150}
+   from langchain.llms import HuggingFaceHub
+
+llm = HuggingFaceHub(
+    repo_id="bigscience/bloom-1b1",  # Replace with the desired model repo
+    huggingfacehub_api_token=huggingfacehub_api_token
 )
 
     # Load the FAQ data

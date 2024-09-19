@@ -16,7 +16,8 @@ def load_chatbot():
     # Initialize Hugging Face Hub with the token
     llm = HuggingFaceHub(
         repo_id="mistralai/Mistral-7B-Instruct-v0.3",
-        huggingfacehub_api_token=huggingfacehub_api_token
+        huggingfacehub_api_token=huggingfacehub_api_token,
+        task="text-generation" 
     )
 
     

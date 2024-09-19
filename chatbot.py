@@ -14,12 +14,12 @@ def load_chatbot():
     
   from langchain.llms import HuggingFaceHub
 
+from langchain.llms import HuggingFaceHub
+
 llm = HuggingFaceHub(
     repo_id="google/flan-t5-large",
     huggingfacehub_api_token=huggingfacehub_api_token,
-    model_kwargs={"temperature": 0.7}  # Optional, tuning generation parameters
 )
-
     # Load the FAQ data
     with open("spotify_faq_data.json") as f:
         faq_data = json.load(f)

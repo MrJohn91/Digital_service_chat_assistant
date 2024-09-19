@@ -34,3 +34,7 @@ def load_chatbot():
     )
 
     return qa_chain, vector_store
+
+def ask_question(qa_chain, query):
+    result = qa_chain({"question": query})
+    return result["answer"]

@@ -7,7 +7,6 @@ import json
 import os
 
 def load_chatbot():
-    huggingfacehub_api_token = os.getenv("HUGGING_FACE_TOKEN")
     
     # Embedding model
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")

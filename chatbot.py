@@ -12,7 +12,7 @@ def load_chatbot():
     # Embedding model
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     
-    # Correctly initialize the HuggingFaceHub model
+    # Remove any task-specific overrides such as temperature
     llm = HuggingFaceHub(
         repo_id="mistralai/Mistral-7B-Instruct-v0.3",
         huggingfacehub_api_token=huggingfacehub_api_token

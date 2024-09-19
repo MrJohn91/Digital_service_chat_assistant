@@ -7,19 +7,23 @@ import json
 import os
 
 def load_chatbot():
+
     huggingfacehub_api_token = os.getenv("HUGGING_FACE_TOKEN")
     
     # Embedding model
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
+  
     llm = HuggingFaceHub(
         repo_id="mistralai/Mistral-7B-Instruct-v0.3",
         huggingfacehub_api_token=huggingfacehub_api_token
     )
 
+    #FAQ data
     with open("spotify_faq_data.json") as f:
         faq_data = json.load(f)
 
+ 
     faq_text = [f"{faq['question']} {faq['answer']}" for faq in faq_data]
     vector_store = FAISS.from_texts(faq_text, embedding_model)
 
@@ -37,6 +41,6 @@ def load_chatbot():
     return qa_chain, vector_store
 
 def ask_question(qa_chain, query):
-
+   
     result = qa_chain({"question": query})
     return result["answer"]

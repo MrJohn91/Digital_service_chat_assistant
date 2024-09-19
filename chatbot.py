@@ -1,6 +1,7 @@
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.llms import HuggingFaceEndpoint
 from langchain.vectorstores import FAISS
+from langchain.llms import HuggingFaceHub
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
@@ -10,7 +11,11 @@ import os
 def load_chatbot():
     huggingfacehub_api_token = os.getenv("HUGGING_FACE_TOKEN")
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    llm = HuggingFaceEndpoint(repo_id="mistralai/Mistral-7B-Instruct-v0.3", huggingfacehub_api_token=huggingfacehub_api_token)
+    
+  llm = HuggingFaceHub(
+        repo_id="mistralai/Mistral-7B-Instruct-v0.3",
+        huggingfacehub_api_token=huggingfacehub_api_token
+    )
     
     with open("spotify_faq_data.json") as f:
         faq_data = json.load(f)

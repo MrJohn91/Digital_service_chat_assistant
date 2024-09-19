@@ -12,12 +12,15 @@ def load_chatbot():
     # Embedding model
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     
-    # Use a general-purpose model for flexibility
-   from langchain.llms import HuggingFaceHub
-
-llm = HuggingFaceHub(
-    repo_id="bigscience/bloom-1b1",  # Replace with the desired model repo
-    huggingfacehub_api_token=huggingfacehub_api_token
+   llm = HuggingFaceHub(
+    repo_id="google/flan-t5-large",
+    huggingfacehub_api_token=huggingfacehub_api_token,
+    model_kwargs={
+        "temperature": 0.5,  # More deterministic
+        "repetition_penalty": 1.2,  # Penalize word repetition
+        "top_p": 0.9,  # Nucleus sampling for diverse responses
+        "top_k": 50  # Limit token pool to increase diversity
+    }
 )
 
     # Load the FAQ data

@@ -12,8 +12,8 @@ def load_chatbot():
     # Embedding model
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     
-    # Initialize the InferenceClient (use the client in the qa_chain later)
-    client = InferenceClient(repo_id="mistralai/Mistral-7B-Instruct-v0.3", token=huggingfacehub_api_token)
+    # Initialize the InferenceClient with the correct parameters
+    client = InferenceClient(model="mistralai/Mistral-7B-Instruct-v0.3", token=huggingfacehub_api_token)
 
     # Load the FAQ data
     with open("spotify_faq_data.json") as f:

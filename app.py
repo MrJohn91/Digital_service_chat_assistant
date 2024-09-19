@@ -44,7 +44,7 @@ qa_chain, vector_store = load_chatbot()
 if "chat_history" not in st.session_state:
     st.session_state["chat_history"] = []
 
-# chat history
+# Display chat history
 for chat in st.session_state["chat_history"]:
     st.write(f"**You**: {chat['question']}")
     st.write(f"**Chatbot**: {chat['answer']}")
@@ -86,3 +86,5 @@ if user_input:
 with st.sidebar:
     st.header("Get Help with Spotify")
     st.write("Ask about subscriptions, account settings, or billing.")
+
+

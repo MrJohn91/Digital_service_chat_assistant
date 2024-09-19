@@ -13,10 +13,11 @@ def load_chatbot():
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     
     # Use a general-purpose model for flexibility
-    llm = HuggingFaceHub(
-        repo_id="google/flan-t5-base",  # Try using a more general-purpose model
-        huggingfacehub_api_token=huggingfacehub_api_token
-    )
+   llm = HuggingFaceHub(
+    repo_id="bigscience/bloom-560m",  # or another model
+    huggingfacehub_api_token=huggingfacehub_api_token,
+    model_kwargs={"temperature": 0.6, "max_new_tokens": 150}
+)
 
     # Load the FAQ data
     with open("spotify_faq_data.json") as f:
@@ -24,13 +25,11 @@ def load_chatbot():
 
     faq_text = [f"{faq['question']} {faq['answer']}" for faq in faq_data]
 
-    # Set up FAISS VectorStore for retrieval
     vector_store = FAISS.from_texts(faq_text, embedding_model)
 
-    # Set up Conversation Memory
+    #  Conversation Memory
     memory = ConversationBufferMemory(memory_key="chat_history")
 
-    # Set up Conversational Retrieval Chain with the correct llm
     qa_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
         retriever=vector_store.as_retriever(),

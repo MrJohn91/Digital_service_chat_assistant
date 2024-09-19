@@ -13,9 +13,10 @@ def load_chatbot():
     # Embedding model
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-    llm = HuggingFaceHub(
-        repo_id="google/flan-t5-base",  
-        huggingfacehub_api_token=huggingfacehub_api_token
+   llm = HuggingFaceHub(
+    repo_id="OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5",  # New conversational model
+    huggingfacehub_api_token=huggingfacehub_api_token
+)
 
     #FAQ data
     with open("spotify_faq_data.json") as f:

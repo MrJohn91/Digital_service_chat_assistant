@@ -2,7 +2,7 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
-from langchain.llms import HuggingFaceHub  # Correct LLM class for Hugging Face
+from langchain.llms import HuggingFaceHub
 import json
 import os
 
@@ -12,9 +12,9 @@ def load_chatbot():
     # Embedding model
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     
-    # Remove any task-specific overrides such as temperature
+    # Use a general-purpose model for flexibility
     llm = HuggingFaceHub(
-        repo_id="mistralai/Mistral-7B-Instruct-v0.3",
+        repo_id="google/flan-t5-base",  # Try using a more general-purpose model
         huggingfacehub_api_token=huggingfacehub_api_token
     )
 
@@ -32,7 +32,7 @@ def load_chatbot():
 
     # Set up Conversational Retrieval Chain with the correct llm
     qa_chain = ConversationalRetrievalChain.from_llm(
-        llm=llm,  # Using HuggingFaceHub model now
+        llm=llm,
         retriever=vector_store.as_retriever(),
         memory=memory,
         verbose=True

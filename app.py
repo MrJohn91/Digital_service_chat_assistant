@@ -17,7 +17,7 @@ st.markdown(
         color: #FFFFFF;  /* White text */
     }
     .stTextInput label {
-        color: #1DB954;  /* Spotify green for input labels */
+        color: #FFFFFF;  /* Spotify white for input labels */
     }
     .stButton button {
         background-color: #1DB954;  /* Spotify green for button */

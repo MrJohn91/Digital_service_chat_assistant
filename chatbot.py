@@ -14,7 +14,7 @@ def load_chatbot():
         raise ValueError("OpenAI API key not found.")
 
     # Initialize the OpenAI Chat Model (gpt-4 or gpt-3.5-turbo)
-    llm = ChatOpenAI(model="gpt-4", openai_api_key=openai_api_key)
+    llm = ChatOpenAI(model="gpt-3.5-turbo", openai_api_key=openai_api_key)
 
     # Embedding model for retrieval
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")

@@ -3,7 +3,7 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
-from langchain.chat_models import ChatOpenAI  # Use ChatOpenAI for OpenAI models
+from langchain.chat_models import ChatOpenAI 
 import os
 import json
 
@@ -45,7 +45,7 @@ def ask_question(qa_chain, query):
     try:
         result = qa_chain({"question": query})
         return result["answer"]
-    except openai.error.OpenAIError as e:
+    except openai.OpenAIError as e:
         # Handle OpenAI API-specific errors
         return f"An error occurred: {str(e)}"
     except Exception as e:

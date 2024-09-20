@@ -1,6 +1,6 @@
 # Spotify Chat Assistant
 
-![Chatbot](./images/Chatbot.jpg)
+![Chatbot](https://github.com/MrJohn91/spotify_chat_assistant/blob/main/Chatbot.jpg?raw=true)
 
 ## Summary
 The **Spotify Chat Assistant** is a project focused on building a chatbot designed to answer frequently asked questions related to Spotify. The main goal was to create an interactive, user-friendly chatbot that provides instant responses based on a dataset of Spotify FAQs. By leveraging AI and embedding models, the chatbot allows users to get quick answers about Spotify's services, including plan upgrades, account features, and general troubleshooting.

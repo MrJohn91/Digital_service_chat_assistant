@@ -13,7 +13,7 @@ The FAQ data used for this project was sourced from various Spotify resources an
 ## Languages and Libraries Used
 - **Python**: The core programming language used to develop the chatbot.
 - **Libraries and Tools**:
-  - **LangChain**: For creating conversational AI.
+  - **LangChain**: A tool used to build AI-powered chatbots that can have conversations with users in a natural way. It helps create smart, interactive conversations.
   - **FAISS**: For efficient vector search.
   - **HuggingFace**: For managing the embedding models.
   - **OpenAI**: For generating AI-driven responses.

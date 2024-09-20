@@ -1,35 +1,38 @@
+import openai
+from openai.error import OpenAIError  # Import the error class
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
-from langchain.chat_models import ChatOpenAI 
+from langchain.chat_models import ChatOpenAI  # Use ChatOpenAI for OpenAI models
 import os
 import json
 
 def load_chatbot():
-    
+    # Ensure OpenAI API key is set
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if openai_api_key is None:
         raise ValueError("OpenAI API key not found.")
 
+    # Initialize the OpenAI model (gpt-4 or gpt-3.5-turbo)
     llm = ChatOpenAI(model="gpt-4", openai_api_key=openai_api_key)
 
     # Embedding model
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-    # FAQ data
+    # Load FAQ data
     with open("spotify_faq_data.json") as f:
         faq_data = json.load(f)
 
     faq_text = [f"{faq['question']} {faq['answer']}" for faq in faq_data]
 
-    # FAISS vector store
+    # Create FAISS vector store
     vector_store = FAISS.from_texts(faq_text, embedding_model)
 
-    #memory for conversational
+    # Create memory for conversational context
     memory = ConversationBufferMemory(memory_key="chat_history")
 
-    # Conversational Retrieval Chain
+    # Set up Conversational Retrieval Chain
     qa_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
         retriever=vector_store.as_retriever(),
@@ -40,5 +43,12 @@ def load_chatbot():
     return qa_chain, vector_store
 
 def ask_question(qa_chain, query):
-    result = qa_chain({"question": query})
-    return result["answer"]
+    try:
+        result = qa_chain({"question": query})
+        return result["answer"]
+    except OpenAIError as e:
+        # Handle OpenAI API-specific errors
+        return f"An error occurred: {str(e)}"
+    except Exception as e:
+        # Handle other generic errors
+        return f"An unexpected error occurred: {str(e)}"

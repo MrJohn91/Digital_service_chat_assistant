@@ -1,5 +1,4 @@
 import openai
-from openai.error import OpenAIError  # Import the error class
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
@@ -46,7 +45,7 @@ def ask_question(qa_chain, query):
     try:
         result = qa_chain({"question": query})
         return result["answer"]
-    except OpenAIError as e:
+    except openai.error.OpenAIError as e:
         # Handle OpenAI API-specific errors
         return f"An error occurred: {str(e)}"
     except Exception as e:

@@ -111,6 +111,10 @@ def get_openai_response(context, user_input):
 def main():
     st.set_page_config(page_title="ALVIE - Chat Assistant", page_icon="🤖", layout="centered")
 
+    # Debugging: Print session state
+    st.write("Current Session ID:", st.session_state.session_id)
+    st.write("Chat History:", st.session_state.chat_history)
+
     # ✅ Chat Interface
     user_input = st.text_input("💬 Talk to ALVIE:", placeholder="Type here...")
 
@@ -121,20 +125,33 @@ def main():
                 ai_response = get_openai_response(context, user_input)
 
                 if ai_response:
+                    # Append to chat history
                     st.session_state.chat_history.append(("You", user_input))
                     st.session_state.chat_history.append(("ALVIE", ai_response))
 
+                    # Debugging: Print session state before MongoDB update
+                    st.write("Session ID before MongoDB update:", st.session_state.session_id)
+
                     # ✅ Store conversation in MongoDB (Ensuring session_id exists)
-                    conversationcol.update_one(
-                        {"session_id": st.session_state.session_id},
-                        {"$push": {"conversation": [user_input, ai_response]}},
-                        upsert=True
-                    )
+                    try:
+                        conversationcol.update_one(
+                            {"session_id": st.session_state.session_id},
+                            {"$push": {"conversation": [user_input, ai_response]}},
+                            upsert=True
+                        )
+                        st.success("Conversation saved to MongoDB!")
+                    except Exception as e:
+                        st.error(f"❌ Failed to save conversation to MongoDB: {e}")
 
     # ✅ Display chat history
+    st.write("### Chat History")
     for sender, message in st.session_state.chat_history:
         st.markdown(f"**{sender}:** {message}")
 
 
 if __name__ == "__main__":
-    main()
+    # Load FAISS index before running the app
+    if load_faiss_index():
+        main()
+    else:
+        st.error("❌ Failed to load FAISS index. Please check the logs.")

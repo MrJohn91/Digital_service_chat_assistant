@@ -3,7 +3,7 @@ import os
 import uuid
 import pymongo
 import faiss
-import requests
+import boto3
 import datetime
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
@@ -11,19 +11,31 @@ from langchain.docstore.document import Document
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from openai import OpenAI
 
-# ✅ Load API Keys from Streamlit Secrets
+# ✅ Load API Keys & Configurations from Streamlit Secrets
 openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+mongo_url = st.secrets["MONGO_URL"]
+aws_access_key = st.secrets["AWS_ACCESS_KEY_ID"]
+aws_secret_key = st.secrets["AWS_SECRET_ACCESS_KEY"]
+aws_region = st.secrets["AWS_REGION"]
+bucket_name = st.secrets["BUCKET_NAME"]
+faiss_index_key = st.secrets["FAISS_INDEX_KEY"]
 
 # ✅ MongoDB Connection
 try:
-    client = pymongo.MongoClient(
-        st.secrets["MONGO_URL"], tls=True, tlsAllowInvalidCertificates=True, serverSelectionTimeoutMS=10000
-    )
+    client = pymongo.MongoClient(mongo_url, tls=True, tlsAllowInvalidCertificates=True, serverSelectionTimeoutMS=10000)
     db = client["chat_with_doc"]
     conversationcol = db["chat-history"]
     feedback_col = db["feedback"]
 except pymongo.errors.ServerSelectionTimeoutError:
     st.error("❌ Could not connect to MongoDB.")
+
+# ✅ AWS S3 Client for FAISS Index Storage
+s3 = boto3.client(
+    "s3",
+    aws_access_key_id=aws_access_key,
+    aws_secret_access_key=aws_secret_key,
+    region_name=aws_region
+)
 
 # ✅ Global FAISS database
 faiss_db = None
@@ -35,32 +47,26 @@ if "session_id" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# ✅ Function to Download FAISS Index from GitHub
-def download_faiss_index():
-    """Downloads FAISS index from GitHub if not available locally."""
-    github_url = "https://raw.githubusercontent.com/MrJohn91/alvie-ai-app/main/faiss_index.bin"
-    
+# ✅ Function to Download FAISS Index from S3
+def download_faiss_from_s3():
+    """Downloads the FAISS index from S3 and saves it locally."""
     if os.path.exists("faiss_index.bin"):
-        return True  # Already downloaded
+        return True  # Already exists, no need to download
 
     try:
-        response = requests.get(github_url)
-        if response.status_code == 200:
-            with open("faiss_index.bin", "wb") as file:
-                file.write(response.content)
-            return True
-        else:
-            return False
+        s3.download_file(bucket_name, faiss_index_key, "faiss_index.bin")
+        return True
     except Exception as e:
+        st.error(f"❌ Failed to download FAISS index from S3: {e}")
         return False
 
 # ✅ Function to Load FAISS Index
 def load_faiss_index():
-    """Loads FAISS index from a file after downloading from GitHub."""
+    """Loads FAISS index from file after downloading from S3."""
     global faiss_db
 
     if not os.path.exists("faiss_index.bin"):
-        if not download_faiss_index():
+        if not download_faiss_from_s3():
             return False
 
     try:

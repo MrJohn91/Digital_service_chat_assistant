@@ -37,17 +37,15 @@ s3 = boto3.client(
 FAISS_S3_BUCKET = "ai-document-storage"
 FAISS_S3_KEY = "faiss_index.bin"
 
+# ✅ Ensure session state is initialized
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
 # ✅ Global FAISS database
 faiss_db = None
-
-
-# ✅ Ensure session state is initialized
-def initialize_session():
-    if "session_id" not in st.session_state:
-        st.session_state.session_id = str(uuid.uuid4())
-
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
 
 
 # ✅ Function to Download FAISS Index from S3
@@ -113,61 +111,10 @@ def get_openai_response(context, user_input):
 def main():
     st.set_page_config(page_title="ALVIE - Chat Assistant", page_icon="🤖", layout="centered")
 
-    # ✅ Initialize session state
-    initialize_session()
-
-    # ✅ Custom Styling for Chat UI
-    st.markdown("""
-        <style>
-            .stApp { max-width: 700px; margin: auto; }
-            h1 { color: #4CAF50; text-align: center; }
-
-            /* Chat bubbles styling */
-            .user-message { 
-                background-color: #0084FF;
-                color: white; 
-                padding: 12px; 
-                border-radius: 15px; 
-                margin-bottom: 8px; 
-                font-size: 16px;
-                width: fit-content;
-                max-width: 80%;
-                text-align: right;
-                margin-left: auto;
-                box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
-            }
-            .bot-message { 
-                background-color: #E8E8E8;
-                color: black;
-                padding: 12px; 
-                border-radius: 15px; 
-                margin-bottom: 8px; 
-                font-size: 16px;
-                width: fit-content;
-                max-width: 80%;
-                text-align: left;
-                margin-right: auto;
-                box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
-            }
-            .chat-container { margin-top: 20px; }
-        </style>
-    """, unsafe_allow_html=True)
-
-    st.title("🤖 ALVIE - Chat Assistant")
-    st.markdown("_Your personal assistant_")
-
-    # ✅ Load FAISS index silently
-    if "faiss_loaded" not in st.session_state:
-        st.session_state.faiss_loaded = load_faiss_index()
-
     # ✅ Chat Interface
     user_input = st.text_input("💬 Talk to ALVIE:", placeholder="Type here...")
 
     if st.button("Send"):
-        if not st.session_state.faiss_loaded:
-            st.warning("❌ FAISS index is not loaded.")
-            return
-
         if user_input:
             with st.spinner("Thinking..."):
                 context = get_relevant_context(user_input)
@@ -177,6 +124,7 @@ def main():
                     st.session_state.chat_history.append(("You", user_input))
                     st.session_state.chat_history.append(("ALVIE", ai_response))
 
+                    # ✅ Store conversation in MongoDB (Ensuring session_id exists)
                     conversationcol.update_one(
                         {"session_id": st.session_state.session_id},
                         {"$push": {"conversation": [user_input, ai_response]}},
@@ -184,26 +132,8 @@ def main():
                     )
 
     # ✅ Display chat history
-    st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
     for sender, message in st.session_state.chat_history:
-        if sender == "You":
-            st.markdown(f"<div class='user-message'><strong>{sender}:</strong> {message}</div>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<div class='bot-message'><strong>{sender}:</strong> {message}</div>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # ✅ User Rating Feedback (Stored in MongoDB)
-    if st.session_state.chat_history:
-        st.header("📝 Rate the Response")
-        rating = st.radio("How satisfied are you with ALVIE's response?", ["⭐", "⭐⭐", "⭐⭐⭐", "⭐⭐⭐⭐", "⭐⭐⭐⭐⭐"])
-
-        if st.button("Submit Rating"):
-            feedback_col.insert_one({
-                "session_id": st.session_state.session_id,
-                "rating": rating,
-                "timestamp": datetime.datetime.now()
-            })
-            st.success("Thank you for your feedback!")
+        st.markdown(f"**{sender}:** {message}")
 
 
 if __name__ == "__main__":

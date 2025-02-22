@@ -3,66 +3,70 @@ import os
 import uuid
 import pymongo
 import faiss
-import boto3
+import requests
 import datetime
+import boto3
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from langchain.docstore.document import Document
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from openai import OpenAI
 
-# ✅ Load API Keys & Configurations from Streamlit Secrets
+# ✅ Load API Keys from Streamlit Secrets
 openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-mongo_url = st.secrets["MONGO_URL"]
-aws_access_key = st.secrets["AWS_ACCESS_KEY_ID"]
-aws_secret_key = st.secrets["AWS_SECRET_ACCESS_KEY"]
-aws_region = st.secrets["AWS_REGION"]
-bucket_name = st.secrets["BUCKET_NAME"]
-faiss_index_key = st.secrets["FAISS_INDEX_KEY"]
 
 # ✅ MongoDB Connection
 try:
-    client = pymongo.MongoClient(mongo_url, tls=True, tlsAllowInvalidCertificates=True, serverSelectionTimeoutMS=10000)
+    client = pymongo.MongoClient(
+        st.secrets["MONGO_URL"], tls=True, tlsAllowInvalidCertificates=True, serverSelectionTimeoutMS=10000
+    )
     db = client["chat_with_doc"]
     conversationcol = db["chat-history"]
     feedback_col = db["feedback"]
 except pymongo.errors.ServerSelectionTimeoutError:
     st.error("❌ Could not connect to MongoDB.")
 
-# ✅ AWS S3 Client for FAISS Index Storage
+# ✅ AWS S3 Setup for FAISS Index
 s3 = boto3.client(
     "s3",
-    aws_access_key_id=aws_access_key,
-    aws_secret_access_key=aws_secret_key,
-    region_name=aws_region
+    aws_access_key_id=st.secrets["AWS_ACCESS_KEY"],
+    aws_secret_access_key=st.secrets["AWS_SECRET_KEY"],
+    region_name="us-east-1",
 )
+
+FAISS_S3_BUCKET = "ai-document-storage"
+FAISS_S3_KEY = "faiss_index.bin"
 
 # ✅ Global FAISS database
 faiss_db = None
 
-# ✅ Ensure session state is initialized
-if "session_id" not in st.session_state:
-    st.session_state.session_id = str(uuid.uuid4())
 
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+# ✅ Ensure session state is initialized
+def initialize_session():
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = str(uuid.uuid4())
+
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
 
 # ✅ Function to Download FAISS Index from S3
 def download_faiss_from_s3():
-    """Downloads the FAISS index from S3 and saves it locally."""
+    """Downloads FAISS index from S3 if not available locally."""
     if os.path.exists("faiss_index.bin"):
-        return True  # Already exists, no need to download
+        return True  # Already downloaded
 
     try:
-        s3.download_file(bucket_name, faiss_index_key, "faiss_index.bin")
+        s3.download_file(FAISS_S3_BUCKET, FAISS_S3_KEY, "faiss_index.bin")
         return True
     except Exception as e:
         st.error(f"❌ Failed to download FAISS index from S3: {e}")
         return False
 
+
 # ✅ Function to Load FAISS Index
 def load_faiss_index():
-    """Loads FAISS index from file after downloading from S3."""
+    """Loads FAISS index from a file after downloading from S3."""
     global faiss_db
 
     if not os.path.exists("faiss_index.bin"):
@@ -75,8 +79,10 @@ def load_faiss_index():
         docstore = InMemoryDocstore({})
         faiss_db = FAISS(embedding_function=embeddings, index=index, docstore=docstore, index_to_docstore_id={})
         return True
-    except Exception:
+    except Exception as e:
+        st.error(f"❌ FAISS Loading Failed: {e}")
         return False
+
 
 # ✅ Function to Retrieve Relevant Context from FAISS
 def get_relevant_context(user_input):
@@ -85,6 +91,7 @@ def get_relevant_context(user_input):
         retrieved_docs = faiss_db.similarity_search(user_input, k=3)
         return "\n".join([doc.page_content for doc in retrieved_docs]) if retrieved_docs else "No relevant context found."
     return "No relevant context found."
+
 
 # ✅ Function to Get AI Response
 def get_openai_response(context, user_input):
@@ -101,14 +108,17 @@ def get_openai_response(context, user_input):
     except Exception:
         return "❌ OpenAI API Error."
 
+
 # ✅ Streamlit UI
 def main():
     st.set_page_config(page_title="ALVIE - Chat Assistant", page_icon="🤖", layout="centered")
 
+    # ✅ Initialize session state
+    initialize_session()
+
     # ✅ Custom Styling for Chat UI
     st.markdown("""
         <style>
-            body { background-color: #f8f9fa; }
             .stApp { max-width: 700px; margin: auto; }
             h1 { color: #4CAF50; text-align: center; }
 
@@ -194,6 +204,7 @@ def main():
                 "timestamp": datetime.datetime.now()
             })
             st.success("Thank you for your feedback!")
+
 
 if __name__ == "__main__":
     main()

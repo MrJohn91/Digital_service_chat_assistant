@@ -1,90 +1,193 @@
 import streamlit as st
-from chatbot import load_chatbot, ask_question  
+import os
+import uuid
+import pymongo
+import faiss
+import requests
+import datetime
+from langchain_community.vectorstores import FAISS
+from langchain_openai import OpenAIEmbeddings
+from langchain.docstore.document import Document
+from langchain_community.docstore.in_memory import InMemoryDocstore
+from openai import OpenAI
 
+# ✅ Load API Keys from Streamlit Secrets
+openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-st.set_page_config(
-    page_title="Spotify Chat Assistant",  
-    page_icon="https://upload.wikimedia.org/wikipedia/commons/2/26/Spotify_logo_with_text.svg",  
-    layout="centered",
-)
+# ✅ MongoDB Connection
+try:
+    client = pymongo.MongoClient(
+        st.secrets["MONGO_URL"], tls=True, tlsAllowInvalidCertificates=True, serverSelectionTimeoutMS=10000
+    )
+    db = client["chat_with_doc"]
+    conversationcol = db["chat-history"]
+    feedback_col = db["feedback"]
+except pymongo.errors.ServerSelectionTimeoutError:
+    st.error("❌ Could not connect to MongoDB.")
 
-# App theme
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background-color: #191414;  /* Spotify black background */
-        color: #FFFFFF;  /* White text */
-    }
-    .stTextInput label {
-        color: #FFFFFF;  /* Spotify white text for input labels */
-    }
-    .stButton button {
-        background-color: #1DB954;  /* Spotify green for button */
-        color: #FFFFFF;  /* White text on button */
-    }
-    .stTextInput input {
-        background-color: #262626;  /* Darker input box */
-        color: #FFFFFF;  /* White text in input */
-    }
-    .stMarkdown h1 {
-        color: #1ED760;  /* Spotify green for the title */
-    }
-    </style>
-    """, unsafe_allow_html=True
-)
+# ✅ Global FAISS database
+faiss_db = None
 
-# Streamlit UI
-st.title("Spotify Chat Assistant 🎧")
-
-
-qa_chain, vector_store = load_chatbot()
-
+# ✅ Ensure session state is initialized
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
 
 if "chat_history" not in st.session_state:
-    st.session_state["chat_history"] = []
+    st.session_state.chat_history = []
 
-# Display chat history
-for chat in st.session_state["chat_history"]:
-    st.write(f"**You**: {chat['question']}")
-    st.write(f"**Chatbot**: {chat['answer']}")
-    st.write("---")
-
-# User input
-user_input = st.text_input("Ask a question:")
-
-if user_input:
+# ✅ Function to Download FAISS Index from GitHub
+def download_faiss_index():
+    """Downloads FAISS index from GitHub if not available locally."""
+    github_url = "https://raw.githubusercontent.com/MrJohn91/alvie-ai-app/main/faiss_index.bin"
     
-    response = ask_question(qa_chain, user_input)
-    
-    # Save the chat history
-    st.session_state["chat_history"].append({"question": user_input, "answer": response})
+    if os.path.exists("faiss_index.bin"):
+        return True  # Already downloaded
 
-    
-    st.write(f"**Chatbot**: {response}")
+    try:
+        response = requests.get(github_url)
+        if response.status_code == 200:
+            with open("faiss_index.bin", "wb") as file:
+                file.write(response.content)
+            return True
+        else:
+            return False
+    except Exception as e:
+        return False
 
-    
-    st.write("Was this response helpful?")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button('👍'):
-            st.success("Thanks for your feedback!")
-    with col2:
-        if st.button('👎'):
-            st.warning("Sorry the response was not helpful. Visit the Spotify community for more help (https://community.spotify.com).")
+# ✅ Function to Load FAISS Index
+def load_faiss_index():
+    """Loads FAISS index from a file after downloading from GitHub."""
+    global faiss_db
 
-    
-    st.write("### Related FAQ:")
-    related_faqs = vector_store.similarity_search(user_input, k=1)  
+    if not os.path.exists("faiss_index.bin"):
+        if not download_faiss_index():
+            return False
 
-    for idx, faq in enumerate(related_faqs):
-        question = faq.page_content.split("Answer:")[0].strip()  
-        if st.button(question, key=f"faq_{idx}"):  
-            st.write(f"**Answer**: {faq.page_content.split('Answer:')[1].strip()}")  
+    try:
+        index = faiss.read_index("faiss_index.bin")
+        embeddings = OpenAIEmbeddings()
+        docstore = InMemoryDocstore({})
+        faiss_db = FAISS(embedding_function=embeddings, index=index, docstore=docstore, index_to_docstore_id={})
+        return True
+    except Exception:
+        return False
 
-# Sidebar
-with st.sidebar:
-    st.header("Get Help with Spotify")
-    st.write("Ask about subscriptions, account settings, or billing.")
+# ✅ Function to Retrieve Relevant Context from FAISS
+def get_relevant_context(user_input):
+    """Retrieve relevant context from FAISS"""
+    if faiss_db:
+        retrieved_docs = faiss_db.similarity_search(user_input, k=3)
+        return "\n".join([doc.page_content for doc in retrieved_docs]) if retrieved_docs else "No relevant context found."
+    return "No relevant context found."
 
+# ✅ Function to Get AI Response
+def get_openai_response(context, user_input):
+    """Fetches AI response using OpenAI API."""
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that uses document data to answer questions."},
+                {"role": "user", "content": f"Context: {context}\n\nQuestion: {user_input}"}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception:
+        return "❌ OpenAI API Error."
 
+# ✅ Streamlit UI
+def main():
+    st.set_page_config(page_title="ALVIE - Chat Assistant", page_icon="🤖", layout="centered")
+
+    # ✅ Custom Styling for Chat UI
+    st.markdown("""
+        <style>
+            body { background-color: #f8f9fa; }
+            .stApp { max-width: 700px; margin: auto; }
+            h1 { color: #4CAF50; text-align: center; }
+
+            /* Chat bubbles styling */
+            .user-message { 
+                background-color: #0084FF;
+                color: white; 
+                padding: 12px; 
+                border-radius: 15px; 
+                margin-bottom: 8px; 
+                font-size: 16px;
+                width: fit-content;
+                max-width: 80%;
+                text-align: right;
+                margin-left: auto;
+                box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+            }
+            .bot-message { 
+                background-color: #E8E8E8;
+                color: black;
+                padding: 12px; 
+                border-radius: 15px; 
+                margin-bottom: 8px; 
+                font-size: 16px;
+                width: fit-content;
+                max-width: 80%;
+                text-align: left;
+                margin-right: auto;
+                box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+            }
+            .chat-container { margin-top: 20px; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.title("🤖 ALVIE - Chat Assistant")
+    st.markdown("_Your personal assistant_")
+
+    # ✅ Load FAISS index silently
+    if "faiss_loaded" not in st.session_state:
+        st.session_state.faiss_loaded = load_faiss_index()
+
+    # ✅ Chat Interface
+    user_input = st.text_input("💬 Talk to ALVIE:", placeholder="Type here...")
+
+    if st.button("Send"):
+        if not st.session_state.faiss_loaded:
+            st.warning("❌ FAISS index is not loaded.")
+            return
+
+        if user_input:
+            with st.spinner("Thinking..."):
+                context = get_relevant_context(user_input)
+                ai_response = get_openai_response(context, user_input)
+
+                if ai_response:
+                    st.session_state.chat_history.append(("You", user_input))
+                    st.session_state.chat_history.append(("ALVIE", ai_response))
+
+                    conversationcol.update_one(
+                        {"session_id": st.session_state.session_id},
+                        {"$push": {"conversation": [user_input, ai_response]}},
+                        upsert=True
+                    )
+
+    # ✅ Display chat history
+    st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
+    for sender, message in st.session_state.chat_history:
+        if sender == "You":
+            st.markdown(f"<div class='user-message'><strong>{sender}:</strong> {message}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div class='bot-message'><strong>{sender}:</strong> {message}</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ✅ User Rating Feedback (Stored in MongoDB)
+    if st.session_state.chat_history:
+        st.header("📝 Rate the Response")
+        rating = st.radio("How satisfied are you with ALVIE's response?", ["⭐", "⭐⭐", "⭐⭐⭐", "⭐⭐⭐⭐", "⭐⭐⭐⭐⭐"])
+
+        if st.button("Submit Rating"):
+            feedback_col.insert_one({
+                "session_id": st.session_state.session_id,
+                "rating": rating,
+                "timestamp": datetime.datetime.now()
+            })
+            st.success("Thank you for your feedback!")
+
+if __name__ == "__main__":
+    main()

@@ -1,157 +1,88 @@
 import streamlit as st
-import os
-import uuid
-import pymongo
-import faiss
-import requests
-import datetime
-import boto3
-from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
-from langchain.docstore.document import Document
-from langchain_community.docstore.in_memory import InMemoryDocstore
-from openai import OpenAI
+from chatbot import load_chatbot, ask_question  
 
-# ✅ Load API Keys from Streamlit Secrets
-openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# ✅ MongoDB Connection
-try:
-    client = pymongo.MongoClient(
-        st.secrets["MONGO_URL"], tls=True, tlsAllowInvalidCertificates=True, serverSelectionTimeoutMS=10000
-    )
-    db = client["chat_with_doc"]
-    conversationcol = db["chat-history"]
-    feedback_col = db["feedback"]
-except pymongo.errors.ServerSelectionTimeoutError:
-    st.error("❌ Could not connect to MongoDB.")
-
-# ✅ AWS S3 Setup for FAISS Index
-s3 = boto3.client(
-    "s3",
-    aws_access_key_id=st.secrets["AWS_ACCESS_KEY"],
-    aws_secret_access_key=st.secrets["AWS_SECRET_KEY"],
-    region_name="us-east-1",
+st.set_page_config(
+    page_title="Spotify Chat Assistant",  
+    page_icon="https://upload.wikimedia.org/wikipedia/commons/2/26/Spotify_logo_with_text.svg",  
+    layout="centered",
 )
 
-FAISS_S3_BUCKET = "ai-document-storage"
-FAISS_S3_KEY = "faiss_index.bin"
+# App theme
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-color: #191414;  /* Spotify black background */
+        color: #FFFFFF;  /* White text */
+    }
+    .stTextInput label {
+        color: #FFFFFF;  /* Spotify white text for input labels */
+    }
+    .stButton button {
+        background-color: #1DB954;  /* Spotify green for button */
+        color: #FFFFFF;  /* White text on button */
+    }
+    .stTextInput input {
+        background-color: #262626;  /* Darker input box */
+        color: #FFFFFF;  /* White text in input */
+    }
+    .stMarkdown h1 {
+        color: #1ED760;  /* Spotify green for the title */
+    }
+    </style>
+    """, unsafe_allow_html=True
+)
 
-# ✅ Ensure session state is initialized
-if "session_id" not in st.session_state:
-    st.session_state.session_id = str(uuid.uuid4())
+# Streamlit UI
+st.title("Spotify Chat Assistant 🎧")
+
+
+qa_chain, vector_store = load_chatbot()
+
 
 if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+    st.session_state["chat_history"] = []
 
-# ✅ Global FAISS database
-faiss_db = None
+# Display chat history
+for chat in st.session_state["chat_history"]:
+    st.write(f"**You**: {chat['question']}")
+    st.write(f"**Chatbot**: {chat['answer']}")
+    st.write("---")
 
+# User input
+user_input = st.text_input("Ask a question:")
 
-# ✅ Function to Download FAISS Index from S3
-def download_faiss_from_s3():
-    """Downloads FAISS index from S3 if not available locally."""
-    if os.path.exists("faiss_index.bin"):
-        return True  # Already downloaded
+if user_input:
+    
+    response = ask_question(qa_chain, user_input)
+    
+    # Save the chat history
+    st.session_state["chat_history"].append({"question": user_input, "answer": response})
 
-    try:
-        s3.download_file(FAISS_S3_BUCKET, FAISS_S3_KEY, "faiss_index.bin")
-        return True
-    except Exception as e:
-        st.error(f"❌ Failed to download FAISS index from S3: {e}")
-        return False
+    
+    st.write(f"**Chatbot**: {response}")
 
+    
+    st.write("Was this response helpful?")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button('👍'):
+            st.success("Thanks for your feedback!")
+    with col2:
+        if st.button('👎'):
+            st.warning("Sorry the response was not helpful. Visit the Spotify community for more help (https://community.spotify.com).")
 
-# ✅ Function to Load FAISS Index
-def load_faiss_index():
-    """Loads FAISS index from a file after downloading from S3."""
-    global faiss_db
+    
+    st.write("### Related FAQ:")
+    related_faqs = vector_store.similarity_search(user_input, k=1)  
 
-    if not os.path.exists("faiss_index.bin"):
-        if not download_faiss_from_s3():
-            return False
+    for idx, faq in enumerate(related_faqs):
+        question = faq.page_content.split("Answer:")[0].strip()  
+        if st.button(question, key=f"faq_{idx}"):  
+            st.write(f"**Answer**: {faq.page_content.split('Answer:')[1].strip()}")  
 
-    try:
-        index = faiss.read_index("faiss_index.bin")
-        embeddings = OpenAIEmbeddings()
-        docstore = InMemoryDocstore({})
-        faiss_db = FAISS(embedding_function=embeddings, index=index, docstore=docstore, index_to_docstore_id={})
-        return True
-    except Exception as e:
-        st.error(f"❌ FAISS Loading Failed: {e}")
-        return False
-
-
-# ✅ Function to Retrieve Relevant Context from FAISS
-def get_relevant_context(user_input):
-    """Retrieve relevant context from FAISS"""
-    if faiss_db:
-        retrieved_docs = faiss_db.similarity_search(user_input, k=3)
-        return "\n".join([doc.page_content for doc in retrieved_docs]) if retrieved_docs else "No relevant context found."
-    return "No relevant context found."
-
-
-# ✅ Function to Get AI Response
-def get_openai_response(context, user_input):
-    """Fetches AI response using OpenAI API."""
-    try:
-        response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that uses document data to answer questions."},
-                {"role": "user", "content": f"Context: {context}\n\nQuestion: {user_input}"}
-            ]
-        )
-        return response.choices[0].message.content
-    except Exception:
-        return "❌ OpenAI API Error."
-
-
-# ✅ Streamlit UI
-def main():
-    st.set_page_config(page_title="ALVIE - Chat Assistant", page_icon="🤖", layout="centered")
-
-    # Debugging: Print session state
-    st.write("Current Session ID:", st.session_state.session_id)
-    st.write("Chat History:", st.session_state.chat_history)
-
-    # ✅ Chat Interface
-    user_input = st.text_input("💬 Talk to ALVIE:", placeholder="Type here...")
-
-    if st.button("Send"):
-        if user_input:
-            with st.spinner("Thinking..."):
-                context = get_relevant_context(user_input)
-                ai_response = get_openai_response(context, user_input)
-
-                if ai_response:
-                    # Append to chat history
-                    st.session_state.chat_history.append(("You", user_input))
-                    st.session_state.chat_history.append(("ALVIE", ai_response))
-
-                    # Debugging: Print session state before MongoDB update
-                    st.write("Session ID before MongoDB update:", st.session_state.session_id)
-
-                    # ✅ Store conversation in MongoDB (Ensuring session_id exists)
-                    try:
-                        conversationcol.update_one(
-                            {"session_id": st.session_state.session_id},
-                            {"$push": {"conversation": [user_input, ai_response]}},
-                            upsert=True
-                        )
-                        st.success("Conversation saved to MongoDB!")
-                    except Exception as e:
-                        st.error(f"❌ Failed to save conversation to MongoDB: {e}")
-
-    # ✅ Display chat history
-    st.write("### Chat History")
-    for sender, message in st.session_state.chat_history:
-        st.markdown(f"**{sender}:** {message}")
-
-
-if __name__ == "__main__":
-    # Load FAISS index before running the app
-    if load_faiss_index():
-        main()
-    else:
-        st.error("❌ Failed to load FAISS index. Please check the logs.")
+# Sidebar
+with st.sidebar:
+    st.header("Get Help with Spotify")
+    st.write("Ask about subscriptions, account settings, or billing.")
